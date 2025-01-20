@@ -1,5 +1,5 @@
 # SBOM-Hashes
-Script to find public package hashes from Checkmarx SBOM export
+Script to find public package hashes from Checkmarx SBOM export.
 
 Currently supports:
 - npm
