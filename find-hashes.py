@@ -39,7 +39,7 @@ for idx, component in enumerate(sbom["components"]):
 
 		if manager == "nuget":
 			
-			url = "https://www.nuget.org/api/v2/Packages"  # https://www.nuget.org/api/v2/Packages(Id='[$package]',Version='[$version]')
+			url = "https://www.nuget.org/api/v2/Packages"  # https://www.nuget.org/api/v2/Packages(Id='$package',Version='$version')
 			res = requests.get(url+"(Id='"+name+"',Version='"+version+"')")
 			tree = ET.ElementTree(ET.fromstring(res.text))
 			root = tree.getroot()
@@ -47,15 +47,20 @@ for idx, component in enumerate(sbom["components"]):
 				checksum = property.find('{http://schemas.microsoft.com/ado/2007/08/dataservices}PackageHash').text
 				algo = property.find('{http://schemas.microsoft.com/ado/2007/08/dataservices}PackageHashAlgorithm').text
 
+				'''
+				### Find nuget missing licenses ###
+				if component["licenses"][0]["expression"] == "NOASSERTION":
+					license = property.find('{http://schemas.microsoft.com/ado/2007/08/dataservices}LicenseUrl').text
+					component["licenses"][0] = {"expression":license}
+				'''
+
 			component["hashes"].append({"alg":algo, "content":checksum})
 
 		if manager == "maven":
 			
 			name, artifact = name.split(':')
 			name = name.replace(':','/').replace('.','/')+'/'+artifact		
-
 			url = "https://repo1.maven.org/maven2/"  # https://repo1.maven.org/maven2/$group/$artifact/$version/
-
 			res = requests.get(url+name+'/'+version+'/'+artifact+'-'+version+'.jar.sha1')
 			checksum = (res.text.split(' ')[0].strip())
 			algo = "SHA1"
@@ -77,6 +82,31 @@ for idx, component in enumerate(sbom["components"]):
 			for url in res["urls"]:
 				checksum = (url["digests"]["sha256"])
 				component["hashes"].append({"alg":algo, "content":checksum})
+
+		if manager == "cpan":
+
+			name = ('::').join(name.split('-'))
+			url = "https://fastapi.metacpan.org/v1/download_url/"  # https://fastapi.metacpan.org/v1/download_url/$name?version===$version
+			res = json.loads(requests.get(url+name+'?version==='+version).text)
+			checksum = res["checksum_sha256"]
+			algo = "SHA256"
+			component["hashes"].append({"alg":algo, "content":checksum})
+
+		if manager == "php":  # currently no checksum provided
+
+			group, artifact = name.split('/')
+			url = "https://repo.packagist.org/p2/"  # https://repo.packagist.org/p2/$group/$artifact.json
+			res = json.loads(requests.get(url+group+'/'+artifact+'.json').text)
+			for ver in res["packages"][name]:
+				if ver["version"] == version:
+					checksum = ver["dist"]["shasum"]
+
+			if len(checksum) != 0:
+				component["hashes"].append({"content":checksum})
+			else:
+				error = "[!] PHP package without checksum: " + ref
+				print(error)
+				log += error+'\n'
 
 		# CPP packages dependant on arch > write to error log
 		if manager == "cpp":
