@@ -6,6 +6,7 @@ Currently supports:
 - nuget
 - maven
 - python
+- cpan
 
 ## Usage:
 ```shell
